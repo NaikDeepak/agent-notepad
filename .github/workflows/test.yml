@@ -1,0 +1,20 @@
+name: tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: git config --global user.email ci@example.com && git config --global user.name ci
+      - name: Install tmux
+        run: command -v tmux || (sudo apt-get update -qq && sudo apt-get install -y -qq tmux) || brew install tmux
+      - run: tests/run.sh
