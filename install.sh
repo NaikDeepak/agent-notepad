@@ -6,7 +6,8 @@
 # Adds (never overwrites existing files; safe to run twice):
 #   scripts/collab.sh, scripts/watch-agent.sh   the notepad CLI and the tmux watcher
 #   AGENTS.md                                   protocol section appended (created if missing)
-#   CLAUDE.md, GEMINI.md                        a short pointer to AGENTS.md appended (created if missing)
+#   CLAUDE.md                                   lead instructions appended (created if missing)
+#   GEMINI.md                                   a short pointer to AGENTS.md appended (created if missing)
 #   docs/tasks/_template.md                     task-spec template for the lead
 #   .gitignore                                  .collab/ (the notepad stays local)
 set -euo pipefail
@@ -38,15 +39,14 @@ POINTER="## Working with other agents
 <!-- $MARK -->
 Several coding agents share this repo. Before any task, read **\"Working with other agents\" in AGENTS.md** and
 follow it: run \`scripts/collab.sh status\`, claim before editing, hand off and release when done."
-append_once CLAUDE.md "$POINTER"
+append_once CLAUDE.md "$(cat "$SRC/templates/CLAUDE-lead.md")"
 append_once GEMINI.md "$POINTER"
 if grep -qxF '.collab/' "$DEST/.gitignore" 2>/dev/null; then echo "  skip   .gitignore (.collab/ already ignored)"
 else printf '\n# agent-notepad (local only)\n.collab/\n' >> "$DEST/.gitignore"; echo "  updated .gitignore"; fi
 
 cat <<EOF
 
-Done. Next:
-  1. Edit the names/roles table in AGENTS.md and the default in scripts/collab.sh (or export COLLAB_AGENTS).
-  2. cd "$DEST" && scripts/collab.sh status
-  3. Follow README "Step 3" onwards to sign in each agent and give them permissions.
+Done. Open Claude Code in $DEST and describe what to build.
+Watch the builder with:  tmux attach -t agy     (detach: Ctrl-b, then d)
+Using names other than claude / agy / codex? See docs/appendix.md in the kit.
 EOF

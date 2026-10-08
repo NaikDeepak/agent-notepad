@@ -18,6 +18,7 @@ echo "install"
 check "copies both scripts"            '[[ -x $T/scripts/collab.sh && -x $T/scripts/watch-agent.sh ]]'
 check "AGENTS.md has the protocol"      'grep -q "agent-notepad protocol" $T/AGENTS.md'
 check "CLAUDE.md and GEMINI.md point to it" 'grep -q "AGENTS.md" $T/CLAUDE.md && grep -q "AGENTS.md" $T/GEMINI.md'
+check "CLAUDE.md makes Claude the lead"   'grep -q "you are the lead" $T/CLAUDE.md && grep -q "tmux new-session" $T/CLAUDE.md'
 check "notepad is gitignored"           'grep -qx ".collab/" $T/.gitignore'
 "$REPO/install.sh" "$T" >/dev/null
 check "second install changes nothing"  '[[ $(grep -c "agent-notepad protocol" $T/AGENTS.md) == 1 && $(grep -cx ".collab/" $T/.gitignore) == 1 ]]'
