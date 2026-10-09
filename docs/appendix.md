@@ -86,8 +86,12 @@ Exact settings for each CLI: [`permissions.md`](permissions.md).
 - The notepad is gitignored and local. The protocol forbids secrets and personal data in it.
 - Appends take a `mkdir` lock: 20 agents writing at once lose nothing (tested).
 - The watcher auto-approves only when **every** part of a `&&` / `||` / `;` chain is on the read-only list.
-  Pipes, redirects, `$(…)`, backticks, `find -delete/-exec`, `git branch -D`, and anything that names a
-  secret-looking file (`.env`, keys, credentials) always wait for a decision.
+  Pipes, redirects (`<`, `>`), `$(…)`, backticks, lone `&`, `find -delete/-exec/-fls`, `git branch -D`,
+  dangerous flags (`rg --pre`, `git grep -O`, `git diff/log --ext-diff`), multi-line or wrapped commands,
+  and anything naming secret files (`.env`, keys) wait for a decision. Inside double quotes `&`, `|`, `;`
+  are plain text, but `$…` and backticks still need a human; inside single quotes everything is plain text.
+- Git commands (including `git status`, via `core.fsmonitor`, and `git diff/log/show` via textconv / external-diff)
+  can run programs set in git config; the watcher cannot see that.
 - It picks the approval option by reading its text: "this conversation" first, never "persist to settings" or "No".
 - Builders work in their own worktree on their own branch. Only the lead merges; only you say "deploy".
 
@@ -103,7 +107,7 @@ scripts/collab.sh release <me> ["<note>"]
 scripts/collab.sh agents                              # valid names
 
 scripts/watch-agent.sh <tmux-session> <agent> <lead> [minutes]
-#   env: SAFE_RE (auto-approvable command prefixes), PROMPT_RE / CMD_AFTER (another CLI's prompt format),
+#   env: SAFE_RE (auto-approvable command prefixes), PROMPT_RE / CMD_AFTER / QUESTION_RE (another CLI's prompt format),
 #        WATCH_INTERVAL (seconds, default 15), COLLAB_DIR, COLLAB_AGENTS
 ```
 

@@ -31,6 +31,7 @@ check "claim shows in status"           '"$C" status > $TMP/s && grep -q "agy: .
 check "release clears the claim"        '"$C" status > $TMP/s && grep -A1 "Active claims" $TMP/s | grep -q "(none)"'
 check "handoff is addressed to the lead" 'grep -q "agy → claude | HANDOFF" $T/.collab/notepad.md'
 check "unknown agent is rejected"       '! "$C" post bob all "hi" 2>/dev/null'
+check "multi-word agent is rejected"     '! "$C" post "claude agy" all "hi" 2>/dev/null'
 check "COLLAB_AGENTS adds names"        'COLLAB_AGENTS="claude bob" "$C" post bob all "hi" && "$C" read 1 | grep -q "bob → all"'
 "$C" post claude all "$(printf 'two\nlines')" >/dev/null
 check "multi-line text stays on one line" '"$C" read 1 | grep -q "two lines"'
@@ -71,10 +72,60 @@ unsafe 'cat .env.local'
 unsafe 'ls -la .env* 2>/dev/null || true'
 unsafe 'grep -r API_KEY ~/.npmrc'
 safe   'git branch --show-current'
+unsafe 'ls & rm -rf build'
+unsafe 'ls "$(rm -rf build)"'
+unsafe 'ls "`rm -rf build`"'
+unsafe 'cat <(rm -rf build)'
+unsafe 'rg --pre ./x.sh pat'
+unsafe 'rg --pre=./x.sh pat'
+unsafe 'git grep -O x'
+unsafe 'git grep --open-files-in-pager x'
+unsafe 'git diff --ext-diff'
+unsafe 'git log -p --ext-diff'
+unsafe 'find . -fls out'
+unsafe $'ls\nrm -rf build'
+safe   'grep -rn "a & b" src'
+safe   $'echo \'costs $(5)\''
+safe   'ls x 2>&1'
+unsafe $'ls "\'" ; rm -rf build "\'"'
+unsafe $'ls "\'" & rm -rf build "\'"'
+unsafe $'ls "\'" > out "\'"'
+unsafe $'ls "it\'s" $(rm -rf build) \'x\''
+unsafe 'cat ~/.ssh/id_ecdsa'
+unsafe 'cat ~/.ssh/id_*'
+unsafe 'ls a\;rm'
+unsafe 'ls "abc'
+unsafe 'git diff "--output=/tmp/x"'
+unsafe 'find . -name x '\''-delete'\'''
+unsafe 'rg "--pre=./x.sh" pat'
+unsafe 'git branch "-D" main'
+unsafe 'find . -name x -exe"c" rm {} ;'
+unsafe 'find . $'\''\x2ddelete'\'''
+unsafe 'find . -name v -{delete,print}'
+unsafe 'ls "${x:=/tmp/marker}"'
+unsafe 'ls $HOME'
+safe   'grep -rn "foo$" src'
+unsafe 'git branch --del x'
+unsafe 'git branch newbranch'
+unsafe 'git branch -u origin/x'
+unsafe 'git branch --edit-description'
+unsafe 'git grep --open x'
+unsafe 'git grep --op x'
+unsafe 'tail -f log'
+unsafe 'tail -F log'
+unsafe 'tail --follow log'
+safe   'git grep --or'
+safe   'git branch -a'
 three=$'Run this command?\n> 1. Yes, run command\n  2. Yes, and always allow in this conversation for commands that start with \'ls\'\n  3. Yes, and always allow (Persist to settings.json)\n  4. No, cancel'
 two=$'Run this command?\n> 1. Yes\n  2. No'
 check "picks 'this conversation', not a fixed number" '[[ $(pick_option "$three") == 2 ]]'
 check "on a Yes/No prompt picks Yes (1), never No"   '[[ $(pick_option "$two") == 1 ]]'
+wrap_q_screen=$'Requesting permission for:\n   ls src\n   && rm -rf build?\nRun this command?\n> 1. Yes\n'
+wrap_q_cmd=$(extract_cmd "$wrap_q_screen")
+check "extract_cmd preserves lines ending in ?" 'printf "%s\n" "$wrap_q_cmd" | grep -q "&& rm -rf build?" && ! is_safe "$wrap_q_cmd"'
+wrap_n_screen=$'Requesting permission for:\n   ls notes-\n1.txt && rm -rf build\nRun this command?\n> 1. Yes\n'
+wrap_n_cmd=$(extract_cmd "$wrap_n_screen")
+check "extract_cmd keeps a wrapped line that starts like an option" 'printf "%s\n" "$wrap_n_cmd" | grep -q "rm -rf build" && ! is_safe "$wrap_n_cmd"'
 
 echo "watcher end-to-end (tmux)"
 if command -v tmux >/dev/null; then
@@ -94,6 +145,21 @@ FAKE
   check "safe prompt approved with the 'this conversation' option" 'grep -qx "chose 2 for git status" $TMP/choices'
   check "unsafe prompt stops and wakes the lead" 'printf "%s" "$out" | grep -q "PROMPT (needs decision): rm -rf build"'
   check "approval is logged"                  'grep -q "option 2 | git status" $T/.collab/approvals.log'
+
+  cat > "$TMP/fake-agent-wrap.sh" <<'FAKE'
+#!/usr/bin/env bash
+printf 'Requesting permission for:\n   ls src\n   && rm -rf build\nRun this command?\n> 1. Yes, run command\n  2. Yes, and always allow in this conversation\n  3. No, cancel\n'
+read -r n
+echo "chose $n" >> "$1"
+sleep 60
+FAKE
+  chmod +x "$TMP/fake-agent-wrap.sh"
+  S2="anp-test-wrap-$$"
+  tmux new-session -d -s "$S2" -x 200 -y 50 "$TMP/fake-agent-wrap.sh $TMP/choices-wrap"
+  out2=$(cd "$T" && WATCH_INTERVAL=1 scripts/watch-agent.sh "$S2" agy claude 1 2>&1)
+  tmux kill-session -t "$S2" 2>/dev/null
+  check "wrapped command stops and needs decision" 'printf "%s" "$out2" | grep -q "PROMPT (needs decision)"'
+  check "wrapped command did not auto-approve" '[[ ! -f $TMP/choices-wrap ]]'
 else
   echo "  skip (tmux not installed)"
 fi
