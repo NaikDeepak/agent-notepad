@@ -78,3 +78,22 @@ that tracks the quote state (none / single / double):
 Then check each part against SAFE_RE and the dangerous-flag rules, as now. All 57 existing tests must still pass,
 including `grep -rn "a|b" src`, `grep -rn "a & b" src` and `echo 'costs $(5)'` staying safe.
 Commit, then handoff + release again.
+
+## Round 3 (review feedback from claude; codex found nothing new)
+The dangerous-flag checks run on the part text where quoted words became `Q`, so a quoted flag is invisible to
+them. Confirmed by running: `git diff "--output=written.txt"` writes a file and `find . -name x '-delete'` deletes.
+These exist on `main` too. All must need a human:
+22. `git diff "--output=/tmp/x"`
+23. `find . -name x '-delete'`
+24. `rg "--pre=./x.sh" pat`
+25. `git branch "-D" main`
+26. `find . -name x -exe"c" rm {} ;`
+27. `find . $'\x2ddelete'`        — `$'…'` / `$"…"` quoting
+28. `find . -name v -{delete,print}` — brace expansion
+29. `ls "${x:=/tmp/marker}"` and `ls $HOME` — any `$` outside single quotes, except `$` immediately before a closing
+    double quote or at the end of a word inside double quotes (keep `grep -rn "foo$" src` safe: add it as a safe case).
+
+Fix: in the scanner keep TWO texts per part: the masked text (quoted text → `Q`, used for structure, as now) and
+a literal text (quote characters removed, quoted contents kept). Run SAFE_RE on the masked text and the
+dangerous-flag regex on the literal text. Outside quotes, `{`, `}` and a `$` → human. Inside double quotes, `$`
+followed by a letter, `_`, `{` or `(` → human. All 65 existing tests must still pass. Commit, then handoff + release.
