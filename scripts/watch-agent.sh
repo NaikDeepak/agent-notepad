@@ -32,8 +32,11 @@ handoffs() { grep -c "$AGENT → $LEAD | HANDOFF" "$PAD" || true; }
 # Safe only if single-line and every part of a chain (&&, ||, ;) is on the safe list. Quotes other than single
 # quotes are not inert. Pipes, redirects (<, >), backticks, $(…), lone &, and dangerous flags need a human.
 is_safe() {
-  local s="$1" len i=0 state="none" c c2
-  local current_part="" parts=() part parts_checked=0
+  local s="$1" len i=0 state="none" c c2 c_next
+  local current_masked="" current_literal=""
+  local masked_parts=() literal_parts=()
+  local m_part l_part idx parts_checked=0
+  local var_re='^[a-zA-Z_{0-9(]'
 
   [[ "$s" == *$'\n'* ]] && return 1
   [[ -z "${s//[[:space:]]/}" ]] && return 1
@@ -48,17 +51,25 @@ is_safe() {
     if [[ "$state" == "single" ]]; then
       if [[ "$c" == "'" ]]; then
         state="none"
-        current_part="${current_part}Q"
+        current_masked="${current_masked}Q"
+      else
+        current_literal="${current_literal}${c}"
       fi
       (( i++ ))
     elif [[ "$state" == "double" ]]; then
       if [[ "$c" == '"' ]]; then
         state="none"
-        current_part="${current_part}Q"
+        current_masked="${current_masked}Q"
         (( i++ ))
-      elif [[ "$c" == '`' || "$c2" == '$(' ]]; then
+      elif [[ "$c" == '`' ]]; then
         return 1
+      elif [[ "$c" == '$' ]]; then
+        c_next="${s:i+1:1}"
+        if [[ "$c_next" =~ $var_re ]]; then return 1; fi
+        current_literal="${current_literal}${c}"
+        (( i++ ))
       else
+        current_literal="${current_literal}${c}"
         (( i++ ))
       fi
     else
@@ -70,25 +81,32 @@ is_safe() {
         state="double"
         (( i++ ))
       elif [[ "${s:i:11}" == "2>/dev/null" ]]; then
-        current_part="${current_part} "
+        current_masked="${current_masked} "
+        current_literal="${current_literal} "
         (( i += 11 ))
       elif [[ "${s:i:4}" == "2>&1" ]]; then
-        current_part="${current_part} "
+        current_masked="${current_masked} "
+        current_literal="${current_literal} "
         (( i += 4 ))
-      elif [[ "$c" == '\' || "$c" == '`' || "$c2" == '$(' || "$c" == '<' || "$c" == '>' ]]; then
+      elif [[ "$c" == '\' || "$c" == '`' || "$c" == '<' || "$c" == '>' || "$c" == '{' || "$c" == '}' || "$c" == '$' ]]; then
         return 1
       elif [[ "$c2" == '&&' || "$c2" == '||' ]]; then
-        parts+=("$current_part")
-        current_part=""
+        masked_parts+=("$current_masked")
+        literal_parts+=("$current_literal")
+        current_masked=""
+        current_literal=""
         (( i += 2 ))
       elif [[ "$c" == ';' ]]; then
-        parts+=("$current_part")
-        current_part=""
+        masked_parts+=("$current_masked")
+        literal_parts+=("$current_literal")
+        current_masked=""
+        current_literal=""
         (( i++ ))
       elif [[ "$c" == '&' || "$c" == '|' ]]; then
         return 1
       else
-        current_part="${current_part}${c}"
+        current_masked="${current_masked}${c}"
+        current_literal="${current_literal}${c}"
         (( i++ ))
       fi
     fi
@@ -96,15 +114,17 @@ is_safe() {
 
   # ending inside a quote -> human
   [[ "$state" != "none" ]] && return 1
-  parts+=("$current_part")
+  masked_parts+=("$current_masked")
+  literal_parts+=("$current_literal")
 
-  for part in "${parts[@]}"; do
-    part=$(printf '%s' "$part" | sed 's/^ *//; s/ *$//')
-    [[ -z "$part" ]] && continue
+  for idx in "${!masked_parts[@]}"; do
+    m_part=$(printf '%s' "${masked_parts[idx]}" | sed 's/^ *//; s/ *$//')
+    l_part=$(printf '%s' "${literal_parts[idx]}" | sed 's/^ *//; s/ *$//')
+    [[ -z "$m_part" && -z "$l_part" ]] && continue
     (( parts_checked++ ))
-    printf '%s' "$part" | grep -qE "$SAFE_RE" || return 1
+    printf '%s' "$m_part" | grep -qE "$SAFE_RE" || return 1
     # "safe" commands that can still write or delete
-    printf '%s' "$part" | grep -qE '(^find .*-(exec|execdir|ok|delete|fprint|fls))|(^git branch( .*)? (-[a-zA-Z]*[dDmMcCf]|--(delete|move|copy|force))( |$))|(^git (diff|log|show) .*(--output|--ext-diff))|(^git grep .*(-[a-zA-Z]*O|--open-files-in-pager)( |$|=))|(^rg .*--pre(=| |$))' && return 1
+    printf '%s' "$l_part" | grep -qE '(^find .*-(exec|execdir|ok|delete|fprint|fls))|(^git branch( .*)? (-[a-zA-Z]*[dDmMcCf]|--(delete|move|copy|force))( |$))|(^git (diff|log|show) .*(--output|--ext-diff))|(^git grep .*(-[a-zA-Z]*O|--open-files-in-pager)( |$|=))|(^rg .*--pre(=| |$))' && return 1
   done
 
   [[ $parts_checked -eq 0 ]] && return 1
