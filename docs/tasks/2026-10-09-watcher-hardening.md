@@ -57,3 +57,24 @@ collab.sh:
 ## Don'ts
 - No new dependencies. No changes outside the file list. No background commands. One command per call.
 - Don't loosen any existing rule to make a test pass. When unsure, send it to a human.
+
+## Round 2 (review feedback from claude + codex)
+Stripping single quotes and then double quotes with `sed` is wrong whenever one kind of quote sits inside the
+other. These all pass `is_safe` today and must need a human (`main` already rejects the `;` one, so this is a regression):
+16. `ls "'" ; rm -rf build "'"`
+17. `ls "'" & rm -rf build "'"`
+18. `ls "'" > out "'"`
+19. `ls "it's" $(rm -rf build) 'x'`
+20. `cat ~/.ssh/id_ecdsa` and `cat ~/.ssh/id_*` — treat `id_` followed by letters/digits/`*`, and anything under `.ssh/`, as secret.
+21. A backslash outside single quotes (`ls a\;rm`) and an unterminated quote (`ls "abc`) → human.
+
+Fix: replace the sed-based quote stripping with ONE left-to-right scanner in bash (a `while` loop over `${s:i:1}`)
+that tracks the quote state (none / single / double):
+- inside single quotes: everything is literal;
+- inside double quotes: a backtick or `$(` → human;
+- outside quotes: a backtick, `$(`, `<`, `>`, a lone `|` or `&`, or a backslash → human, except the exact tokens
+  `2>/dev/null` and `2>&1`; `;`, `&&` and `||` split parts; quoted text becomes `Q` in the part text;
+- ending inside a quote → human.
+Then check each part against SAFE_RE and the dangerous-flag rules, as now. All 57 existing tests must still pass,
+including `grep -rn "a|b" src`, `grep -rn "a & b" src` and `echo 'costs $(5)'` staying safe.
+Commit, then handoff + release again.
