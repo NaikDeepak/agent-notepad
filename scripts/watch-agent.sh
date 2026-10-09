@@ -29,21 +29,47 @@ LOG="${COLLAB_DIR:-$ROOT/.collab}/approvals.log"
 
 handoffs() { grep -c "$AGENT → $LEAD | HANDOFF" "$PAD" || true; }
 
-# Safe only if every part of a chain (&&, ||, ;) is on the safe list, after ignoring quoted text and
-# harmless stderr redirects. Pipes, other redirects, backticks and $(…) always need a human decision.
+# Safe only if single-line and every part of a chain (&&, ||, ;) is on the safe list. Quotes other than single
+# quotes are not inert. Pipes, redirects (<, >), backticks, $(…), lone &, and dangerous flags need a human.
 is_safe() {
   local clean part
-  clean=$(printf '%s' "$1" | sed -E "s/\"[^\"]*\"/Q/g; s/'[^']*'/Q/g; s#2>/dev/null##g; s#2>&1##g")
-  printf '%s' "$clean" | grep -qE '(`|\$\(|[^|]\|[^|]|>)' && return 1
+  [[ "$1" == *$'\n'* ]] && return 1
+  [[ -z "${1//[[:space:]]/}" ]] && return 1
+  clean=$(printf '%s' "$1" | sed -E "s/'[^']*'/Q/g")
+  printf '%s' "$clean" | grep -qE '(`|\$\(|<)' && return 1
+  clean=$(printf '%s' "$clean" | sed -E 's/"[^"]*"/Q/g; s#2>/dev/null##g; s#2>&1##g')
+  printf '%s' "$clean" | grep -q '>' && return 1
+  printf '%s' "$clean" | sed 's/||//g' | grep -q '|' && return 1
+  printf '%s' "$clean" | sed 's/&&//g' | grep -q '&' && return 1
   # anything that names a secret-looking file is shown to a human, even a read: the agent's model would see it
   printf '%s' "$1" | grep -qiE '(\.env|\.pem|\.key|id_rsa|id_ed25519|credentials|secret|\.npmrc|\.netrc)' && return 1
   while IFS= read -r part; do
     part=$(printf '%s' "$part" | sed 's/^ *//; s/ *$//'); [[ -z "$part" ]] && continue
     printf '%s' "$part" | grep -qE "$SAFE_RE" || return 1
     # "safe" commands that can still write or delete
-    printf '%s' "$part" | grep -qE '(^find .*-(exec|execdir|ok|delete|fprint))|(^git branch( .*)? (-[a-zA-Z]*[dDmMcCf]|--(delete|move|copy|force))( |$))|(^git (diff|log|show) .*--output)' && return 1
+    printf '%s' "$part" | grep -qE '(^find .*-(exec|execdir|ok|delete|fprint|fls))|(^git branch( .*)? (-[a-zA-Z]*[dDmMcCf]|--(delete|move|copy|force))( |$))|(^git (diff|log|show) .*(--output|--ext-diff))|(^git grep .*(-[a-zA-Z]*O|--open-files-in-pager)( |$|=))|(^rg .*--pre(=| |$))' && return 1
   done < <(printf '%s\n' "$clean" | sed 's/&&/;/g; s/||/;/g' | tr ';' '\n')
   return 0
+}
+
+# Collect command lines after CMD_AFTER up to the first blank line, question, or option.
+extract_cmd() {
+  local screen="$1" found=0 line trimmed res="" opt_re='^[> ]*[0-9]+\.'
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" == *"$CMD_AFTER"* ]]; then
+      found=1; res=""
+      continue
+    fi
+    if [[ $found -eq 1 ]]; then
+      trimmed=$(printf '%s' "$line" | sed 's/^ *//; s/ *$//')
+      if [[ -z "$trimmed" || "$trimmed" == *'?' || "$line" =~ $opt_re ]]; then
+        found=0
+        continue
+      fi
+      if [[ -z "$res" ]]; then res="$trimmed"; else res="$res"$'\n'"$trimmed"; fi
+    fi
+  done < <(printf '%s\n' "$screen")
+  printf '%s' "$res"
 }
 
 # Pick the option number to approve: prefer "this conversation/session", else plain "Yes". Never "always"
@@ -69,7 +95,7 @@ for _ in $(seq 1 $((MINUTES * 60 / INTERVAL))); do
   if [[ "$(handoffs)" -gt "$start" ]]; then echo "HANDOFF (auto-approved $approved)"; exit 0; fi
   screen=$(tmux capture-pane -t "$SESSION" -p 2>/dev/null || true)
   if printf '%s' "$screen" | grep -q "$PROMPT_RE"; then
-    cmd=$(printf '%s\n' "$screen" | grep -A1 "$CMD_AFTER" | tail -1 | sed 's/^ *//')
+    cmd=$(extract_cmd "$screen")
     opt=$(pick_option "$screen")
     if is_safe "$cmd" && [[ -n "$opt" ]]; then
       tmux send-keys -t "$SESSION" "$opt"; sleep 1; tmux send-keys -t "$SESSION" Enter

@@ -25,7 +25,7 @@ LOCK="$DIR/.lock"
 mkdir -p "$DIR"
 [[ -f "$PAD" ]] || printf '# Agent notepad (append-only; newest at the bottom)\n# time | from → to | KIND | text\n\n' > "$PAD"
 
-valid() { [[ " $AGENTS all " == *" $1 "* ]] || { echo "Unknown agent '$1' (use: $AGENTS all)" >&2; exit 2; }; }
+valid() { local a; for a in $AGENTS all; do [[ "$a" == "$1" ]] && return 0; done; echo "Unknown agent '$1' (use: $AGENTS all)" >&2; exit 2; }
 append() { # one line, under a mkdir lock (atomic on every filesystem) so two agents can't interleave writes
   local tries=0
   until mkdir "$LOCK" 2>/dev/null; do

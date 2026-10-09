@@ -86,8 +86,9 @@ Exact settings for each CLI: [`permissions.md`](permissions.md).
 - The notepad is gitignored and local. The protocol forbids secrets and personal data in it.
 - Appends take a `mkdir` lock: 20 agents writing at once lose nothing (tested).
 - The watcher auto-approves only when **every** part of a `&&` / `||` / `;` chain is on the read-only list.
-  Pipes, redirects, `$(…)`, backticks, `find -delete/-exec`, `git branch -D`, and anything that names a
-  secret-looking file (`.env`, keys, credentials) always wait for a decision.
+  Pipes, redirects (`<`, `>`), `$(…)`, backticks, lone `&`, `find -delete/-exec/-fls`, `git branch -D`,
+  dangerous flags (`rg --pre`, `git grep -O`, `git diff/log --ext-diff`), multi-line or wrapped commands,
+  and anything naming secret files (`.env`, keys) wait for a decision. Only single quotes are inert.
 - It picks the approval option by reading its text: "this conversation" first, never "persist to settings" or "No".
 - Builders work in their own worktree on their own branch. Only the lead merges; only you say "deploy".
 
