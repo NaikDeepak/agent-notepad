@@ -14,13 +14,14 @@
 # "1 Yes / 2 No", others "1 Yes / 2 Yes, always this conversation / 3 … / 4 No". Pressing "2" blindly once
 # declined a test run and left the agent idle.
 #
-# Tuned for the Antigravity CLI prompt ("Requesting permission for:"). For another CLI set PROMPT_RE and
-# CMD_AFTER (the line after which the command is printed). Extend SAFE_RE for your stack's test commands.
+# Tuned for the Antigravity CLI prompt ("Requesting permission for:"). For another CLI set PROMPT_RE,
+# CMD_AFTER (the line after which the command is printed), and QUESTION_RE. Extend SAFE_RE for your stack's test commands.
 set -euo pipefail
 
 SAFE_RE="${SAFE_RE:-^(ls|cat|head|tail|wc|find|grep|rg|pwd|echo|git status|git diff|git log|git show|git grep|git branch|npm test|npm run test|npm run typecheck|npm run lint|npx vitest run|npx tsc --noEmit|pytest|go test|cargo test|scripts/collab\.sh|\./scripts/collab\.sh)( |$)}"
 PROMPT_RE="${PROMPT_RE:-Requesting permission for:}"
 CMD_AFTER="${CMD_AFTER:-Requesting permission for:}"
+QUESTION_RE="${QUESTION_RE:-^ *Run this command\?}"
 
 COMMON="$(git -C "$(dirname "$0")" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
 if [[ -n "$COMMON" ]]; then ROOT="$(dirname "$COMMON")"; else ROOT="$(cd "$(dirname "$0")/.." && pwd)"; fi
@@ -29,8 +30,9 @@ LOG="${COLLAB_DIR:-$ROOT/.collab}/approvals.log"
 
 handoffs() { grep -c "$AGENT → $LEAD | HANDOFF" "$PAD" || true; }
 
-# Safe only if single-line and every part of a chain (&&, ||, ;) is on the safe list. Quotes other than single
-# quotes are not inert. Pipes, redirects (<, >), backticks, $(…), lone &, and dangerous flags need a human.
+# Safe only if single-line and every part of a chain (&&, ||, ;) is on the safe list. Inside double quotes
+# &, |, ; are plain text, but $… and backticks still need a human; inside single quotes everything is plain text.
+# Pipes, redirects (<, >), lone &, and dangerous flags need a human decision.
 is_safe() {
   local s="$1" len i=0 state="none" c c2 c_next
   local current_masked="" current_literal=""
@@ -134,7 +136,7 @@ is_safe() {
   return 0
 }
 
-# Collect command lines after CMD_AFTER up to the first blank line, question, or option.
+# Collect command lines after CMD_AFTER up to the first blank line, QUESTION_RE, or option.
 extract_cmd() {
   local screen="$1" found=0 line trimmed res="" opt_re='^[> ]*[0-9]+\.'
   while IFS= read -r line || [[ -n "$line" ]]; do
@@ -144,7 +146,7 @@ extract_cmd() {
     fi
     if [[ $found -eq 1 ]]; then
       trimmed=$(printf '%s' "$line" | sed 's/^ *//; s/ *$//')
-      if [[ -z "$trimmed" || "$trimmed" == *'?' || "$line" =~ $opt_re ]]; then
+      if [[ -z "$trimmed" || "$line" =~ $QUESTION_RE || "$line" =~ $opt_re ]]; then
         found=0
         continue
       fi

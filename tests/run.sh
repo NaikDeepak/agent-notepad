@@ -120,6 +120,9 @@ three=$'Run this command?\n> 1. Yes, run command\n  2. Yes, and always allow in 
 two=$'Run this command?\n> 1. Yes\n  2. No'
 check "picks 'this conversation', not a fixed number" '[[ $(pick_option "$three") == 2 ]]'
 check "on a Yes/No prompt picks Yes (1), never No"   '[[ $(pick_option "$two") == 1 ]]'
+wrap_q_screen=$'Requesting permission for:\n   ls src\n   && rm -rf build?\nRun this command?\n> 1. Yes\n'
+wrap_q_cmd=$(extract_cmd "$wrap_q_screen")
+check "extract_cmd preserves lines ending in ?" 'printf "%s\n" "$wrap_q_cmd" | grep -q "&& rm -rf build?" && ! is_safe "$wrap_q_cmd"'
 
 echo "watcher end-to-end (tmux)"
 if command -v tmux >/dev/null; then
