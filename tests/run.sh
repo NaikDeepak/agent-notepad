@@ -123,6 +123,9 @@ check "on a Yes/No prompt picks Yes (1), never No"   '[[ $(pick_option "$two") =
 wrap_q_screen=$'Requesting permission for:\n   ls src\n   && rm -rf build?\nRun this command?\n> 1. Yes\n'
 wrap_q_cmd=$(extract_cmd "$wrap_q_screen")
 check "extract_cmd preserves lines ending in ?" 'printf "%s\n" "$wrap_q_cmd" | grep -q "&& rm -rf build?" && ! is_safe "$wrap_q_cmd"'
+wrap_n_screen=$'Requesting permission for:\n   ls notes-\n1.txt && rm -rf build\nRun this command?\n> 1. Yes\n'
+wrap_n_cmd=$(extract_cmd "$wrap_n_screen")
+check "extract_cmd keeps a wrapped line that starts like an option" 'printf "%s\n" "$wrap_n_cmd" | grep -q "rm -rf build" && ! is_safe "$wrap_n_cmd"'
 
 echo "watcher end-to-end (tmux)"
 if command -v tmux >/dev/null; then

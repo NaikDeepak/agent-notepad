@@ -136,9 +136,10 @@ is_safe() {
   return 0
 }
 
-# Collect command lines after CMD_AFTER up to the first blank line, QUESTION_RE, or option.
+# Collect command lines after CMD_AFTER up to the first blank line or QUESTION_RE. Not at an option-looking line:
+# a wrapped command can continue with "1.txt && rm …", and the options always come after the question anyway.
 extract_cmd() {
-  local screen="$1" found=0 line trimmed res="" opt_re='^[> ]*[0-9]+\.'
+  local screen="$1" found=0 line trimmed res=""
   while IFS= read -r line || [[ -n "$line" ]]; do
     if [[ "$line" == *"$CMD_AFTER"* ]]; then
       found=1; res=""
@@ -146,7 +147,7 @@ extract_cmd() {
     fi
     if [[ $found -eq 1 ]]; then
       trimmed=$(printf '%s' "$line" | sed 's/^ *//; s/ *$//')
-      if [[ -z "$trimmed" || "$line" =~ $QUESTION_RE || "$line" =~ $opt_re ]]; then
+      if [[ -z "$trimmed" || "$line" =~ $QUESTION_RE ]]; then
         found=0
         continue
       fi
