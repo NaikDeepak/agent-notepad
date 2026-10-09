@@ -110,3 +110,18 @@ Keep: `git branch --show-current` and `git branch -a` safe (add `-a` as a safe c
 Also add one line to docs/appendix.md section F: `git diff/log/show` still run any textconv / external-diff program
 configured in git config; the watcher cannot see that.
 All 75 existing tests must still pass. Commit, then handoff + release.
+
+## Round 5 (codex final review, confirmed by claude)
+`extract_cmd` stops at ANY line ending in `?`, so a wrapped command whose second line ends in `?` loses that line.
+Confirmed: screen `ls src` / `&& rm -rf build?` / `Run this command?` extracts only `ls src`, which is then approved.
+33. Unit test (source with WATCH_AGENT_LIB=1, set CMD_AFTER): that screen must extract both lines, and is_safe on
+    the result must be false.
+Fix: add `QUESTION_RE="${QUESTION_RE:-^ *Run this command\?}"` next to PROMPT_RE / CMD_AFTER (document it in the
+header comment and in docs/appendix.md section G), and stop collecting only at a blank line, a line matching
+QUESTION_RE, or an option line. Never at an arbitrary `?`.
+Docs (docs/appendix.md section F, and the comment above is_safe):
+- replace "Only single quotes are inert." with: inside double quotes `&`, `|`, `;` are plain text, but `$…` and
+  backticks still need a human; inside single quotes everything is plain text.
+- extend the git-config line: git commands (including `git status`, via `core.fsmonitor`) can run programs set in
+  git config; the watcher cannot see that.
+All 86 existing tests must still pass. Commit, then handoff + release.
