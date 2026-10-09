@@ -97,3 +97,16 @@ Fix: in the scanner keep TWO texts per part: the masked text (quoted text → `Q
 a literal text (quote characters removed, quoted contents kept). Run SAFE_RE on the masked text and the
 dangerous-flag regex on the literal text. Outside quotes, `{`, `}` and a `$` → human. Inside double quotes, `$`
 followed by a letter, `_`, `{` or `(` → human. All 65 existing tests must still pass. Commit, then handoff + release.
+
+## Round 4 (review feedback from claude + codex)
+git's own option parser accepts abbreviated long options for `git branch` and `git grep`. Confirmed by running:
+`git branch --del keep` deletes a branch. These must need a human:
+30. `git branch --del x`, `git branch newbranch`, `git branch -u origin/x`, `git branch --edit-description`
+    — only allow-list read-only forms: `git branch` followed only by any of `--show-current --list -a -r -v -vv
+    --all --remotes --verbose` (or nothing). Everything else → human. Replaces the current `git branch` deny rule.
+31. `git grep --open x` and `git grep --op x` — block any `--op…` prefix (keep `git grep --or` safe; add it as a safe case).
+32. `tail -f log`, `tail -F log`, `tail --follow log` — never returns.
+Keep: `git branch --show-current` and `git branch -a` safe (add `-a` as a safe case).
+Also add one line to docs/appendix.md section F: `git diff/log/show` still run any textconv / external-diff program
+configured in git config; the watcher cannot see that.
+All 75 existing tests must still pass. Commit, then handoff + release.
