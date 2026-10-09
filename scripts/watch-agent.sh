@@ -124,7 +124,10 @@ is_safe() {
     (( parts_checked++ ))
     printf '%s' "$m_part" | grep -qE "$SAFE_RE" || return 1
     # "safe" commands that can still write or delete
-    printf '%s' "$l_part" | grep -qE '(^find .*-(exec|execdir|ok|delete|fprint|fls))|(^git branch( .*)? (-[a-zA-Z]*[dDmMcCf]|--(delete|move|copy|force))( |$))|(^git (diff|log|show) .*(--output|--ext-diff))|(^git grep .*(-[a-zA-Z]*O|--open-files-in-pager)( |$|=))|(^rg .*--pre(=| |$))' && return 1
+    if printf '%s' "$m_part" | grep -qE '^git branch( |$)'; then
+      printf '%s' "$l_part" | grep -qE '^git branch( +(--show-current|--list|-a|-r|-v|-vv|--all|--remotes|--verbose))* *$' || return 1
+    fi
+    printf '%s' "$l_part" | grep -qE '(^find .*-(exec|execdir|ok|delete|fprint|fls))|(^git (diff|log|show) .*(--output|--ext-diff))|(^git grep .*(-[a-zA-Z]*O|--op))|(^rg .*--pre(=| |$))|(^tail .*(-[a-zA-Z0-9]*[fF]|--follow))' && return 1
   done
 
   [[ $parts_checked -eq 0 ]] && return 1

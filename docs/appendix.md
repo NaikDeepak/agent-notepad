@@ -89,6 +89,7 @@ Exact settings for each CLI: [`permissions.md`](permissions.md).
   Pipes, redirects (`<`, `>`), `$(…)`, backticks, lone `&`, `find -delete/-exec/-fls`, `git branch -D`,
   dangerous flags (`rg --pre`, `git grep -O`, `git diff/log --ext-diff`), multi-line or wrapped commands,
   and anything naming secret files (`.env`, keys) wait for a decision. Only single quotes are inert.
+- `git diff/log/show` still run any textconv / external-diff program configured in git config; the watcher cannot see that.
 - It picks the approval option by reading its text: "this conversation" first, never "persist to settings" or "No".
 - Builders work in their own worktree on their own branch. Only the lead merges; only you say "deploy".
 
