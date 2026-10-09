@@ -32,23 +32,82 @@ handoffs() { grep -c "$AGENT → $LEAD | HANDOFF" "$PAD" || true; }
 # Safe only if single-line and every part of a chain (&&, ||, ;) is on the safe list. Quotes other than single
 # quotes are not inert. Pipes, redirects (<, >), backticks, $(…), lone &, and dangerous flags need a human.
 is_safe() {
-  local clean part
-  [[ "$1" == *$'\n'* ]] && return 1
-  [[ -z "${1//[[:space:]]/}" ]] && return 1
-  clean=$(printf '%s' "$1" | sed -E "s/'[^']*'/Q/g")
-  printf '%s' "$clean" | grep -qE '(`|\$\(|<)' && return 1
-  clean=$(printf '%s' "$clean" | sed -E 's/"[^"]*"/Q/g; s#2>/dev/null##g; s#2>&1##g')
-  printf '%s' "$clean" | grep -q '>' && return 1
-  printf '%s' "$clean" | sed 's/||//g' | grep -q '|' && return 1
-  printf '%s' "$clean" | sed 's/&&//g' | grep -q '&' && return 1
+  local s="$1" len i=0 state="none" c c2
+  local current_part="" parts=() part parts_checked=0
+
+  [[ "$s" == *$'\n'* ]] && return 1
+  [[ -z "${s//[[:space:]]/}" ]] && return 1
   # anything that names a secret-looking file is shown to a human, even a read: the agent's model would see it
-  printf '%s' "$1" | grep -qiE '(\.env|\.pem|\.key|id_rsa|id_ed25519|credentials|secret|\.npmrc|\.netrc)' && return 1
-  while IFS= read -r part; do
-    part=$(printf '%s' "$part" | sed 's/^ *//; s/ *$//'); [[ -z "$part" ]] && continue
+  printf '%s' "$s" | grep -qiE '(\.env|\.pem|\.key|id_[a-zA-Z0-9*]|\.ssh/|credentials|secret|\.npmrc|\.netrc)' && return 1
+
+  len=${#s}
+  while (( i < len )); do
+    c="${s:i:1}"
+    c2="${s:i:2}"
+
+    if [[ "$state" == "single" ]]; then
+      if [[ "$c" == "'" ]]; then
+        state="none"
+        current_part="${current_part}Q"
+      fi
+      (( i++ ))
+    elif [[ "$state" == "double" ]]; then
+      if [[ "$c" == '"' ]]; then
+        state="none"
+        current_part="${current_part}Q"
+        (( i++ ))
+      elif [[ "$c" == '`' || "$c2" == '$(' ]]; then
+        return 1
+      else
+        (( i++ ))
+      fi
+    else
+      # state == "none" (outside quotes)
+      if [[ "$c" == "'" ]]; then
+        state="single"
+        (( i++ ))
+      elif [[ "$c" == '"' ]]; then
+        state="double"
+        (( i++ ))
+      elif [[ "${s:i:11}" == "2>/dev/null" ]]; then
+        current_part="${current_part} "
+        (( i += 11 ))
+      elif [[ "${s:i:4}" == "2>&1" ]]; then
+        current_part="${current_part} "
+        (( i += 4 ))
+      elif [[ "$c" == '\' || "$c" == '`' || "$c2" == '$(' || "$c" == '<' || "$c" == '>' ]]; then
+        return 1
+      elif [[ "$c2" == '&&' || "$c2" == '||' ]]; then
+        parts+=("$current_part")
+        current_part=""
+        (( i += 2 ))
+      elif [[ "$c" == ';' ]]; then
+        parts+=("$current_part")
+        current_part=""
+        (( i++ ))
+      elif [[ "$c" == '&' || "$c" == '|' ]]; then
+        return 1
+      else
+        current_part="${current_part}${c}"
+        (( i++ ))
+      fi
+    fi
+  done
+
+  # ending inside a quote -> human
+  [[ "$state" != "none" ]] && return 1
+  parts+=("$current_part")
+
+  for part in "${parts[@]}"; do
+    part=$(printf '%s' "$part" | sed 's/^ *//; s/ *$//')
+    [[ -z "$part" ]] && continue
+    (( parts_checked++ ))
     printf '%s' "$part" | grep -qE "$SAFE_RE" || return 1
     # "safe" commands that can still write or delete
     printf '%s' "$part" | grep -qE '(^find .*-(exec|execdir|ok|delete|fprint|fls))|(^git branch( .*)? (-[a-zA-Z]*[dDmMcCf]|--(delete|move|copy|force))( |$))|(^git (diff|log|show) .*(--output|--ext-diff))|(^git grep .*(-[a-zA-Z]*O|--open-files-in-pager)( |$|=))|(^rg .*--pre(=| |$))' && return 1
-  done < <(printf '%s\n' "$clean" | sed 's/&&/;/g; s/||/;/g' | tr ';' '\n')
+  done
+
+  [[ $parts_checked -eq 0 ]] && return 1
   return 0
 }
 
