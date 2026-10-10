@@ -48,6 +48,47 @@ for i in $(seq 1 20); do "$C" post codex all "parallel $i" >/dev/null & done; wa
 check "20 parallel writes, none lost"   '[[ $(grep -c "parallel " $T/.collab/notepad.md) == 20 ]]'
 check "no stale lock left behind"       '[[ ! -e $T/.collab/.lock ]]'
 
+echo "usage and cost"
+check "install adds the price table"     '[[ -f $T/scripts/prices.tsv ]] && grep -q "^claude-opus-5-5 " $T/scripts/prices.tsv'
+CL="$TMP/session.jsonl"
+cat > "$CL" <<'JSONL'
+{"type":"user","timestamp":"2026-10-09T13:00:00Z","message":{"role":"user","content":"x"},"toolUseResult":{"usage":{"input_tokens":5000000}}}
+{"type":"assistant","timestamp":"2026-10-09T13:01:00Z","message":{"model":"claude-opus-5-5","id":"msg_A","content":[{"type":"text","text":"say \"usage\":{\"input_tokens\":777}"}],"usage":{"input_tokens":10,"cache_creation_input_tokens":1000,"cache_read_input_tokens":5000,"output_tokens":100,"cache_creation":{"ephemeral_1h_input_tokens":400,"ephemeral_5m_input_tokens":600}}}}
+{"type":"assistant","timestamp":"2026-10-09T13:01:00Z","message":{"model":"claude-opus-5-5","id":"msg_A","content":[],"usage":{"input_tokens":10,"cache_creation_input_tokens":1000,"cache_read_input_tokens":5000,"output_tokens":100,"cache_creation":{"ephemeral_1h_input_tokens":400,"ephemeral_5m_input_tokens":600}}}}
+{"type":"assistant","timestamp":"2026-10-09T13:05:00Z","message":{"model":"claude-haiku-4-5-20251001","id":"msg_B","content":[],"usage":{"input_tokens":2000,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":300}}}
+{"type":"assistant","timestamp":"2026-10-09T13:06:00Z","message":{"model":"<synthetic>","id":"msg_C","content":[],"usage":{"input_tokens":0,"output_tokens":0}}}
+JSONL
+"$C" usage-import claude claude-code "$CL" --note "task-u" > "$TMP/u"
+check "claude import: one entry per model"  '[[ $(grep -c "claude → all | USAGE" $T/.collab/notepad.md) == 2 ]]'
+check "claude import: duplicate message ids counted once, escaped text ignored" \
+      'grep -q "model=claude-opus-5-5 in=10 out=100 cr=5000 cw=600 cw1h=400 " $T/.collab/notepad.md'
+check "claude import: synthetic and user lines skipped" '! grep -q "synthetic\|in=5000000" $T/.collab/notepad.md'
+"$C" usage-import claude claude-code "$CL" --note "task-u" >/dev/null
+CX="$TMP/codex.jsonl"
+printf '%s\n' '{"type":"thread.started"}' \
+  '{"type":"turn.completed","usage":{"input_tokens":3000,"cached_input_tokens":1000,"output_tokens":200}}' \
+  '{"type":"turn.completed","usage":{"input_tokens":500,"cached_input_tokens":0,"output_tokens":50}}' > "$CX"
+"$C" usage-import codex codex-json "$CX" --model gpt-test --note "task-u" >/dev/null
+check "codex import: cached tokens split out of input" 'grep -q "codex → all | USAGE | model=gpt-test in=2500 out=250 cr=1000 " $T/.collab/notepad.md'
+"$C" usage agy gemini-test 1000000 100000 --note "task-u" >/dev/null
+"$C" usage agy gemini-other --note "task-u" >/dev/null
+check "usage: model only is allowed"        '"$C" read 1 | grep -q "model=gemini-other in=? out=?"'
+check "usage: half a token pair is rejected" '! "$C" usage agy m 5 2>/dev/null'
+check "usage: bad model name is rejected"   '! "$C" usage agy "a | b" 1 2 2>/dev/null'
+printf 'gemini-*  1  10  0.1  0  0\ngemini-test  2  20  0.2  0  0   # exact wins\n' >> "$T/scripts/prices.tsv"
+"$C" cost --grep task-u > "$TMP/cost"
+# opus: 10*4 + 100*20 + 5000*0.2 + 600*5 + 400*8 = 9240 → 0.01; agy exact price: 1M*2 + 100k*20 = 4.00
+check "cost: re-import replaces, not doubles" 'grep -q "^claude  *claude-opus-5-5  *10  *100  *5000  *1000 " $TMP/cost'
+check "cost: prefix price for a dated model"  'grep -q "^claude  *claude-haiku-4-5-20251001 .* 0.00$" $TMP/cost'
+check "cost: exact price wins over prefix"    'grep -q "^agy  *gemini-test .* 4.00$" $TMP/cost'
+check "cost: unpriced model shows n/a"        'grep -q "^codex  *gpt-test .* n/a$" $TMP/cost && grep -q "no price for codex/gpt-test" $TMP/cost'
+check "cost: unknown token counts flagged"    'grep -q "^agy  *gemini-other  *0+?" $TMP/cost'
+check "cost: total sums the priced rows"      'grep -q "^total  *4.01$" $TMP/cost'
+"$C" post codex all "task-u fyi | USAGE | model=claude-opus-5-5 in=99000000 out=0 cr=0 cw=0 cw1h=0" >/dev/null
+check "cost: a MSG quoting a USAGE line is not counted" '"$C" cost --grep task-u | grep -q "^total  *4.01$"'
+check "usage-import: non-ISO --since is rejected" '! "$C" usage-import claude claude-code "$CL" --since "2026-10-09 13:00" 2>/dev/null'
+check "cost: --grep with no match says so"    '"$C" cost --grep nope | grep -q "no USAGE entries match"'
+
 echo "watcher rules"
 # shellcheck disable=SC1090
 WATCH_AGENT_LIB=1 source "$T/scripts/watch-agent.sh"

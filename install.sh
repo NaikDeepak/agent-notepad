@@ -5,6 +5,7 @@
 #
 # Adds (never overwrites existing files; safe to run twice):
 #   scripts/collab.sh, scripts/watch-agent.sh   the notepad CLI and the tmux watcher
+#   scripts/prices.tsv                          token prices for `collab.sh cost` (edit to match your models)
 #   AGENTS.md                                   protocol section appended (created if missing)
 #   CLAUDE.md                                   lead instructions appended (created if missing)
 #   GEMINI.md                                   a short pointer to AGENTS.md appended (created if missing)
@@ -33,6 +34,7 @@ echo "Installing agent-notepad into $DEST"
 copy scripts/collab.sh scripts/collab.sh
 copy scripts/watch-agent.sh scripts/watch-agent.sh
 chmod +x "$DEST/scripts/collab.sh" "$DEST/scripts/watch-agent.sh"
+copy templates/prices.tsv scripts/prices.tsv
 copy templates/task-spec.md docs/tasks/_template.md
 append_once AGENTS.md "$(cat "$SRC/templates/AGENTS.md")"
 POINTER="## Working with other agents

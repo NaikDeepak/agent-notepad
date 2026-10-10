@@ -21,6 +21,7 @@ know what's happening underneath, change the setup, or fix something.
 |---|---|
 | `scripts/collab.sh` | the notepad script all agents write through |
 | `scripts/watch-agent.sh` | the tmux watcher that approves safe commands |
+| `scripts/prices.tsv` | token prices per model, used by `collab.sh cost` |
 | `AGENTS.md` | the shared protocol (Codex and Antigravity read this file automatically) |
 | `CLAUDE.md` | the lead instructions: how Claude starts agy, sends tasks, watches, reviews |
 | `GEMINI.md` | a pointer to `AGENTS.md` |
@@ -105,11 +106,34 @@ scripts/collab.sh post    <me> <to|all> "<text>"
 scripts/collab.sh handoff <me> <to> "<branch> · <done> · <next>"
 scripts/collab.sh release <me> ["<note>"]
 scripts/collab.sh agents                              # valid names
+scripts/collab.sh usage   <me> <model> [in out [cache_read [cache_write]]] [--note "<task>"]
+scripts/collab.sh usage-import <agent> claude-code <session.jsonl|latest> [--since <ISO UTC>] [--note "<task>"]
+scripts/collab.sh usage-import <agent> codex-json  <events.jsonl> [--model <m>] [--note "<task>"]
+scripts/collab.sh cost [--since "YYYY-MM-DD HH:MM"] [--grep "<task>"]   # tokens + USD per agent and model
+#   env: COLLAB_PRICES (price table, default scripts/prices.tsv), CLAUDE_PROJECTS_DIR (default ~/.claude/projects)
 
 scripts/watch-agent.sh <tmux-session> <agent> <lead> [minutes]
 #   env: SAFE_RE (auto-approvable command prefixes), PROMPT_RE / CMD_AFTER / QUESTION_RE (another CLI's prompt format),
 #        WATCH_INTERVAL (seconds, default 15), COLLAB_DIR, COLLAB_AGENTS
 ```
+
+### Usage and cost tracking
+
+Every `usage` or `usage-import` adds a `USAGE` line to the notepad: who, which model, and token counts.
+`cost` sums them per agent and model and prices them from `scripts/prices.tsv`.
+
+| Agent | Where the numbers come from |
+|---|---|
+| Claude Code | its session log, `~/.claude/projects/<project>/<session>.jsonl` (plus the session's subagent logs). One entry per model. Messages logged twice are counted once. |
+| Codex | `codex exec --json` events: the `usage` of each `turn.completed`. Codex counts cached tokens inside input; the import separates them. |
+| Antigravity / others | what the agent records with `usage`. Model only is fine; tokens show as `+?` until known. |
+
+Importing the same log again replaces the earlier import instead of adding to it, so re-run it as a session grows.
+`--since` limits a Claude Code import to one task (timestamps in the log are UTC). Use the same `--note`
+for every entry of a task, then `cost --grep "<task>"` gives that task's bill.
+
+USD is the pay-as-you-go API price. On a subscription you pay a flat fee; the number shows what the same
+tokens would cost on the API, which is still useful for comparing models and tasks. Models without a price show `n/a`.
 
 ## H. Troubleshooting
 
@@ -128,7 +152,7 @@ All 42 lessons from the pilot: [`lessons.md`](lessons.md).
 
 ```
 install.sh               installs the kit into a repo
-scripts/collab.sh        notepad CLI
+scripts/collab.sh        notepad CLI (also usage and cost tracking)
 scripts/watch-agent.sh   tmux watcher / safe auto-approver
 templates/               AGENTS.md protocol, CLAUDE.md lead section, task-spec template
 docs/                    this appendix, workflow, permissions, lessons
