@@ -132,6 +132,8 @@ case "$cmd" in
         *) echo "unknown option: $1" >&2; exit 2 ;;
       esac
     done
+    # Claude Code logs use ISO UTC ("2026-10-09T13:00"); a notepad-style "2026-10-09 18:58" would compare wrongly.
+    [[ -z "$since" || "$since" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2} ]] || { echo "--since must be ISO UTC, e.g. 2026-10-09T13:00" >&2; exit 2; }
     files=()
     if [[ "$fmt" == claude-code && "$file" == latest ]]; then
       # Claude Code keeps each project's sessions in ~/.claude/projects/<cwd with non-alphanumerics as ->/
@@ -189,7 +191,8 @@ case "$cmd" in
       function add(key, i, o, r, w, h) { if (i == "?" || o == "?") U[key] = 1; I[key] += i; O[key] += o; R[key] += r; W[key] += w; H[key] += h; K[key] = 1 }
       / \| USAGE \| / {
         t = substr($0, 1, 16); if (since != "" && t < since) next; if (g != "" && !index($0, g)) next
-        split($0, f, / \| /); split(f[2], a, " "); agent = a[1]
+        split($0, f, / \| /); if (f[3] != "USAGE") next   # a MSG that merely quotes "| USAGE |" is not usage
+        split(f[2], a, " "); agent = a[1]
         rest = substr($0, index($0, " | USAGE | ") + 11); sub(/ · .*/, "", rest)
         delete v; n = split(rest, kv, " "); for (j = 1; j <= n; j++) { e = index(kv[j], "="); if (e) v[substr(kv[j], 1, e - 1)] = substr(kv[j], e + 1) }
         key = agent SUBSEP v["model"]

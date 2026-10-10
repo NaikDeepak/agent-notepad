@@ -6,6 +6,8 @@
 # Anthropic. Source: https://platform.claude.com/docs/en/about-claude/pricing (checked 2026-10-10)
 claude-fable-5-1    10     50     0.25    12.50   20
 claude-mythos-5-1   10     50     0.25    12.50   20
+claude-fable-5      10     50     1       12.50   20
+claude-mythos-5     10     50     1       12.50   20
 claude-opus-5-5     4      20     0.20    5       8
 claude-sonnet-5-5   2      10     0.10    2.50    4
 claude-haiku-5-5    0.10   0.50   0.01    0.125   0.20    # prompts up to 100K tokens; longer prompts cost 5x

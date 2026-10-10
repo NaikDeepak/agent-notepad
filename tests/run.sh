@@ -84,6 +84,9 @@ check "cost: exact price wins over prefix"    'grep -q "^agy  *gemini-test .* 4.
 check "cost: unpriced model shows n/a"        'grep -q "^codex  *gpt-test .* n/a$" $TMP/cost && grep -q "no price for codex/gpt-test" $TMP/cost'
 check "cost: unknown token counts flagged"    'grep -q "^agy  *gemini-other  *0+?" $TMP/cost'
 check "cost: total sums the priced rows"      'grep -q "^total  *4.01$" $TMP/cost'
+"$C" post codex all "task-u fyi | USAGE | model=claude-opus-5-5 in=99000000 out=0 cr=0 cw=0 cw1h=0" >/dev/null
+check "cost: a MSG quoting a USAGE line is not counted" '"$C" cost --grep task-u | grep -q "^total  *4.01$"'
+check "usage-import: non-ISO --since is rejected" '! "$C" usage-import claude claude-code "$CL" --since "2026-10-09 13:00" 2>/dev/null'
 check "cost: --grep with no match says so"    '"$C" cost --grep nope | grep -q "no USAGE entries match"'
 
 echo "watcher rules"
