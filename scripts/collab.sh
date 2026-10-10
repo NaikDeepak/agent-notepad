@@ -14,6 +14,7 @@
 #   scripts/collab.sh usage-import <agent> codex-json <events.jsonl> [--model <m>] [--note "<text>"]
 #   scripts/collab.sh usage-import <agent> agy <transcript.jsonl|conversation-id|latest> --model <m> [--since <ISO-UTC>] [--note "<text>"]
 #   scripts/collab.sh cost [--since "YYYY-MM-DD HH:MM"] [--grep <text>]   tokens and cost per agent and model
+#   scripts/collab.sh summary "<task>"            end-of-task report: timeline, time taken, review rounds, cost
 #
 # Agent names: set COLLAB_AGENTS (space separated), or edit the default below. "all" is always valid as a recipient.
 set -euo pipefail
@@ -214,6 +215,24 @@ case "$cmd" in
         echo "$agent  $model  in=$i out=$o cache_read=$r  ($n steps, conversation ${src%%@*})" ;;
       *) echo "unknown format '$fmt' (use claude-code, codex-json or agy)" >&2; exit 2 ;;
     esac ;;
+  summary)
+    [[ $# -ge 1 && -n "$1" ]] || { echo "usage: summary \"<task text: spec name, branch or --note>\"" >&2; exit 2; }
+    echo "Summary: $1"; echo
+    grep -F -- "$1" "$PAD" | grep -v ' | USAGE | ' | grep -v '^#' | awk '
+      function mins(t,   y, m, d) { # "YYYY-MM-DD HH:MM" → minutes since a fixed epoch (no mktime in BSD awk)
+        y = substr(t, 1, 4) + 0; m = substr(t, 6, 2) + 0; d = substr(t, 9, 2) + 0
+        if (m <= 2) { y--; m += 12 }
+        return (365 * y + int(y / 4) - int(y / 100) + int(y / 400) + int((153 * (m - 3) + 2) / 5) + d) * 1440 \
+               + substr(t, 12, 2) * 60 + substr(t, 15, 2)
+      }
+      { if (!n++) { first = substr($0, 1, 16); print "Timeline" }
+        last = substr($0, 1, 16); l = $0; if (length(l) > 150) l = substr(l, 1, 147) "..."; print "  " l
+        if (index($0, " | HANDOFF | ")) h++; if (index($0, "REVIEW round")) r++ }
+      END {
+        if (!n) { print "(no notepad entries mention it)"; exit }
+        printf "\nTook %d min (%s → %s) · %d handoff(s) · %d review round(s)\n", mins(last) - mins(first), first, substr(last, 12), h, r
+      }'
+    echo; "$0" cost --grep "$1" ;;
   cost)
     since="" g=""
     while [[ $# -gt 0 ]]; do
@@ -265,5 +284,5 @@ case "$cmd" in
         if (anyq) print "+?: some entries named the model but not the token counts."
         print "USD is the pay-as-you-go API price. On a subscription plan you were not billed this per token."
       }' "$PAD" ;;
-  *) sed -n '2,18p' "$0"; exit 2 ;;
+  *) sed -n '2,19p' "$0"; exit 2 ;;
 esac
