@@ -49,6 +49,8 @@ tmux attach -t agy          # detach again with Ctrl-b, then d
 
 **To see who's doing what:** `scripts/collab.sh status`
 
+**To see which model each agent used, and what it cost:** `scripts/collab.sh cost`
+
 That's all you need. When the work is done, Claude tells you and opens a PR. Merging and deploying stay your decision.
 
 ---

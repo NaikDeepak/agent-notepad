@@ -1,0 +1,21 @@
+# agent-notepad price table, used by `scripts/collab.sh cost`.
+# USD per 1M tokens.  model  input  output  cache_read  cache_write_5m  cache_write_1h
+# A trailing * matches every model that starts with the text before it. Exact names win over prefixes.
+# Models not listed here show "n/a" instead of a cost. Prices change: re-check the vendor page and edit.
+#
+# Anthropic. Source: https://platform.claude.com/docs/en/about-claude/pricing (checked 2026-10-10)
+claude-fable-5-1    10     50     0.25    12.50   20
+claude-mythos-5-1   10     50     0.25    12.50   20
+claude-opus-5-5     4      20     0.20    5       8
+claude-sonnet-5-5   2      10     0.10    2.50    4
+claude-haiku-5-5    0.10   0.50   0.01    0.125   0.20    # prompts up to 100K tokens; longer prompts cost 5x
+claude-opus-5       5      25     0.50    6.25    10
+claude-sonnet-5     2      10     0.20    2.50    4
+claude-opus-4-*     5      25     0.50    6.25    10      # Opus 4.5 to 4.8 (Opus 4 and 4.1 cost 3x)
+claude-sonnet-4-*   3      15     0.30    3.75    6
+claude-haiku-4-5*   1      5      0.10    1.25    2
+#
+# OpenAI (Codex) and Google (Antigravity / Gemini): copy each model's prices from the vendor's pricing page.
+# Codex and Gemini report cached input but no cache writes, so the last two columns can stay 0.
+# gpt-5-codex       <input>  <output>  <cache_read>  0  0
+# gemini-*          <input>  <output>  <cache_read>  0  0
