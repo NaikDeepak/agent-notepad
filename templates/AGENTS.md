@@ -22,7 +22,6 @@ scripts/collab.sh claim <me> "<branch> · <files/area>"
 scripts/collab.sh post <me> <claude|agy|codex|human|all> "<message>"
 scripts/collab.sh handoff <me> <other> "<branch> · <done> · <next>"
 scripts/collab.sh release <me> "<note>"
-scripts/collab.sh usage <me> <model> [<input> <output>] --note "<task>"   # which model you used, and tokens
 scripts/collab.sh cost                            # tokens and cost per agent and model
 ```
 
@@ -34,7 +33,7 @@ scripts/collab.sh cost                            # tokens and cost per agent an
 5. **Stay inside the task spec.** Touch only the files it lists. If you need more, `post` to the lead and wait.
 6. **Ask, don't block silently.** Questions to the lead or the human go through `post`.
 7. **Finishing or pausing:** write a `handoff` (branch, what's done, what's next, test result), then `release`.
-   Before the handoff, record your model with `usage`. Add input and output tokens if your CLI shows them; never guess.
+   The lead records every agent's model and token usage from the CLIs' own logs; don't post usage yourself.
 8. **Never write secrets, keys, connection strings or personal data in the notepad.**
 9. **Production is the human's call.** Only the lead deploys or runs production migrations, and only when the human asks.
 

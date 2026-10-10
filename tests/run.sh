@@ -79,7 +79,7 @@ printf 'gemini-*  1  10  0.1  0  0\ngemini-test  2  20  0.2  0  0   # exact wins
 "$C" cost --grep task-u > "$TMP/cost"
 # opus: 10*4 + 100*20 + 5000*0.2 + 600*5 + 400*8 = 9240 → 0.01; agy exact price: 1M*2 + 100k*20 = 4.00
 check "cost: re-import replaces, not doubles" 'grep -q "^claude  *claude-opus-5-5  *10  *100  *5000  *1000 " $TMP/cost'
-check "cost: prefix price for a dated model"  'grep -q "^claude  *claude-haiku-4-5-20251001 .* 0.00$" $TMP/cost'
+check "cost: prefix price for a dated model"  'grep -q "^claude  *claude-haiku-4-5-20251001 .* <0.01$" $TMP/cost'
 check "cost: exact price wins over prefix"    'grep -q "^agy  *gemini-test .* 4.00$" $TMP/cost'
 check "cost: unpriced model shows n/a"        'grep -q "^codex  *gpt-test .* n/a$" $TMP/cost && grep -q "no price for codex/gpt-test" $TMP/cost'
 check "cost: unknown token counts flagged"    'grep -q "^agy  *gemini-other  *0+?" $TMP/cost'
@@ -88,6 +88,38 @@ check "cost: total sums the priced rows"      'grep -q "^total  *4.01$" $TMP/cos
 check "cost: a MSG quoting a USAGE line is not counted" '"$C" cost --grep task-u | grep -q "^total  *4.01$"'
 check "usage-import: non-ISO --since is rejected" '! "$C" usage-import claude claude-code "$CL" --since "2026-10-09 13:00" 2>/dev/null'
 check "cost: --grep with no match says so"    '"$C" cost --grep nope | grep -q "no USAGE entries match"'
+
+echo "usage importers: codex model lookup, agy"
+export CODEX_HOME="$TMP/codexhome"; mkdir -p "$CODEX_HOME/sessions/2026/10/10"
+printf 'model = "gpt-cfg"\n' > "$CODEX_HOME/config.toml"
+echo '{"type":"session_meta","payload":{"model":"gpt-6-luna"}}' > "$CODEX_HOME/sessions/2026/10/10/rollout-2026-10-10T12-00-00-th-1.jsonl"
+CX2="$TMP/codex2.jsonl"   # two review rounds appended to one file; only th-1 has a session log
+printf '%s\n' '{"type":"thread.started","thread_id":"th-1"}' \
+  '{"type":"turn.completed","usage":{"input_tokens":16113,"cached_input_tokens":6912,"cache_write_input_tokens":1000,"output_tokens":5,"reasoning_output_tokens":0}}' \
+  '{"type":"thread.started","thread_id":"th-2"}' \
+  '{"type":"turn.completed","usage":{"input_tokens":300,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":7,"reasoning_output_tokens":2}}' > "$CX2"
+"$C" usage-import codex codex-json "$CX2" --note task-v >/dev/null
+check "codex import: model read from codex's session log" 'grep -q "codex → all | USAGE | model=gpt-6-luna in=8201 out=5 cr=6912 cw=1000 " $T/.collab/notepad.md'
+check "codex import: falls back to config.toml model"     'grep -q "codex → all | USAGE | model=gpt-cfg in=300 out=7 " $T/.collab/notepad.md'
+unset CODEX_HOME
+export AGY_HOME="$TMP/agyhome"; AL="$AGY_HOME/brain/conv-1/.system_generated/logs"; mkdir -p "$AL"
+cat > "$AL/transcript.jsonl" <<'JSONL'
+{"step_index":0,"source":"USER_EXPLICIT","type":"USER_INPUT","created_at":"2026-10-09T13:28:25Z","content":"say \"output_tokens\":999"}
+{"step_index":1,"source":"MODEL","type":"PLANNER_RESPONSE","created_at":"2026-10-09T13:28:25Z","input_tokens":21028,"cache_read_tokens":0,"output_tokens":1222,"thinking":"\"input_tokens\":5"}
+{"step_index":3,"source":"MODEL","type":"PLANNER_RESPONSE","created_at":"2026-10-09T13:40:00Z","input_tokens":2000,"cache_read_tokens":20000,"output_tokens":200}
+{"step_index":3,"source":"MODEL","type":"PLANNER_RESPONSE","created_at":"2026-10-09T13:40:00Z","input_tokens":2000,"cache_read_tokens":20000,"output_tokens":200}
+JSONL
+check "agy import: --model is required"      '! "$C" usage-import agy agy latest 2>/dev/null'
+"$C" usage-import agy agy latest --model gemini-3.8-flash-high --note task-v >/dev/null
+check "agy import: steps summed once, escaped text ignored" 'grep -q "agy → all | USAGE | model=gemini-3.8-flash-high in=23028 out=1422 cr=20000 cw=0 cw1h=0 src=conv-1 " $T/.collab/notepad.md'
+"$C" usage-import agy agy conv-1 --model gemini-3.8-flash-high --since 2026-10-09T13:30 --note task-w >/dev/null
+check "agy import: conversation id and --since"  'grep -q "model=gemini-3.8-flash-high in=2000 out=200 cr=20000 .*src=conv-1@2026-10-09T13:30" $T/.collab/notepad.md'
+unset AGY_HOME
+cp "$REPO/templates/prices.tsv" "$T/scripts/prices.tsv"
+"$C" cost --grep task-v > "$TMP/cost2"
+# agy: 23028*0.75 + 1422*3.75 + 20000*0.075 = 23103 → 0.02 (price found after stripping "-high")
+check "cost: effort suffix stripped to find a price" 'grep -q "^agy  *gemini-3.8-flash-high .* 0.02$" $TMP/cost2'
+check "cost: codex model priced from the table"      'grep -q "^codex  *gpt-6-luna .* <0.01$" $TMP/cost2 && grep -q "no price for codex/gpt-cfg" $TMP/cost2'
 
 echo "watcher rules"
 # shellcheck disable=SC1090

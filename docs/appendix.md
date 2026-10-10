@@ -64,7 +64,7 @@ If you'd rather run the pieces yourself:
 
 ```bash
 git worktree add ../myproject-wt-agy -b feat/first-task             # builder's own checkout
-tmux new-session -d -s agy -c ../myproject-wt-agy agy                # start agy in tmux
+tmux new-session -d -s agy -c ../myproject-wt-agy 'agy --model gemini-3.8-flash-high'   # start agy in tmux
 tmux send-keys -t agy 'Read AGENTS.md, then do docs/tasks/…' Enter    # give it work
 scripts/watch-agent.sh agy agy claude 40                             # auto-approve safe commands
 scripts/collab.sh status                                             # who's doing what
@@ -109,8 +109,10 @@ scripts/collab.sh agents                              # valid names
 scripts/collab.sh usage   <me> <model> [in out [cache_read [cache_write]]] [--note "<task>"]
 scripts/collab.sh usage-import <agent> claude-code <session.jsonl|latest> [--since <ISO UTC>] [--note "<task>"]
 scripts/collab.sh usage-import <agent> codex-json  <events.jsonl> [--model <m>] [--note "<task>"]
+scripts/collab.sh usage-import <agent> agy <transcript.jsonl|conversation-id|latest> --model <m> [--since <ISO UTC>] [--note "<task>"]
 scripts/collab.sh cost [--since "YYYY-MM-DD HH:MM"] [--grep "<task>"]   # tokens + USD per agent and model
-#   env: COLLAB_PRICES (price table, default scripts/prices.tsv), CLAUDE_PROJECTS_DIR (default ~/.claude/projects)
+#   env: COLLAB_PRICES (price table, default scripts/prices.tsv), CLAUDE_PROJECTS_DIR (default ~/.claude/projects),
+#        CODEX_HOME (default ~/.codex), AGY_HOME (default ~/.gemini/antigravity-cli)
 
 scripts/watch-agent.sh <tmux-session> <agent> <lead> [minutes]
 #   env: SAFE_RE (auto-approvable command prefixes), PROMPT_RE / CMD_AFTER / QUESTION_RE (another CLI's prompt format),
@@ -125,8 +127,9 @@ Every `usage` or `usage-import` adds a `USAGE` line to the notepad: who, which m
 | Agent | Where the numbers come from |
 |---|---|
 | Claude Code | its session log, `~/.claude/projects/<project>/<session>.jsonl` (plus the session's subagent logs). One entry per model. Messages logged twice are counted once. |
-| Codex | `codex exec --json` events: the `usage` of each `turn.completed`. Codex counts cached tokens inside input; the import separates them. |
-| Antigravity / others | what the agent records with `usage`. Model only is fine; tokens show as `+?` until known. |
+| Codex | `codex exec --json` events: the `usage` of each `turn.completed`. Codex counts cached reads and cache writes inside input; the import separates them. The model comes from codex's own session log (`~/.codex/sessions/…/rollout-…-<thread_id>.jsonl`). |
+| Antigravity (agy) | its transcript, `~/.gemini/antigravity-cli/brain/<conversation>/.system_generated/logs/transcript.jsonl`: tokens per step. The transcript doesn't name the model, so pass `--model` (start agy with `--model` so you know it). Model names like `gemini-3.8-flash-high` are priced as `gemini-3.8-flash`. |
+| Others | `collab.sh usage <agent> <model> [in out]`. Model only is fine; tokens show as `+?` until known. |
 
 Importing the same log again replaces the earlier import instead of adding to it, so re-run it as a session grows.
 `--since` limits a Claude Code import to one task (timestamps in the log are UTC). Use the same `--note`
@@ -134,6 +137,9 @@ for every entry of a task, then `cost --grep "<task>"` gives that task's bill.
 
 USD is the pay-as-you-go API price. On a subscription you pay a flat fee; the number shows what the same
 tokens would cost on the API, which is still useful for comparing models and tasks. Models without a price show `n/a`.
+The table uses one price per model, so it doesn't model long-prompt tiers (OpenAI over 272K, Gemini Pro over
+200K, Haiku 5.5 over 100K), Gemini's hourly cache storage, or fast mode. For normal coding sessions the gap is small;
+the notes in `prices.tsv` give the other rates.
 
 ## H. Troubleshooting
 
