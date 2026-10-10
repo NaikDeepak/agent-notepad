@@ -111,6 +111,7 @@ scripts/collab.sh usage-import <agent> claude-code <session.jsonl|latest> [--sin
 scripts/collab.sh usage-import <agent> codex-json  <events.jsonl> [--model <m>] [--note "<task>"]
 scripts/collab.sh usage-import <agent> agy <transcript.jsonl|conversation-id|latest> --model <m> [--since <ISO UTC>] [--note "<task>"]
 scripts/collab.sh cost [--since "YYYY-MM-DD HH:MM"] [--grep "<task>"]   # tokens + USD per agent and model
+scripts/collab.sh summary "<task>"                     # end-of-task report: timeline, time, review rounds, cost
 #   env: COLLAB_PRICES (price table, default scripts/prices.tsv), CLAUDE_PROJECTS_DIR (default ~/.claude/projects),
 #        CODEX_HOME (default ~/.codex), AGY_HOME (default ~/.gemini/antigravity-cli)
 
@@ -133,7 +134,8 @@ Every `usage` or `usage-import` adds a `USAGE` line to the notepad: who, which m
 
 Importing the same log again replaces the earlier import instead of adding to it, so re-run it as a session grows.
 `--since` limits a Claude Code import to one task (timestamps in the log are UTC). Use the same `--note`
-for every entry of a task, then `cost --grep "<task>"` gives that task's bill.
+for every entry of a task, then `cost --grep "<task>"` gives that task's bill, and `summary "<task>"` adds the
+timeline, time taken and review rounds. The lead shows the summary to the human at the end of every feature.
 
 USD is the pay-as-you-go API price. On a subscription you pay a flat fee; the number shows what the same
 tokens would cost on the API, which is still useful for comparing models and tasks. Models without a price show `n/a`.

@@ -20,6 +20,9 @@ only describes what to build and watches; you do the rest.
   - codex: run reviews with `--json >> .collab/codex-<task>.jsonl`, then
     `scripts/collab.sh usage-import codex codex-json .collab/codex-<task>.jsonl --note "<task>"` (model is found in codex's own log)
   - agy: `scripts/collab.sh usage-import agy agy latest --model <the model you started it with> --since <task start> --note "<task>"`
-  - then post `scripts/collab.sh cost --grep "<task>"` to the human. Costs are API list prices, not subscription spend.
+- **Finish every feature with a summary for the human** (after the merge or PR, after the usage imports): run
+  `scripts/collab.sh summary "<task>"` and show its output in your final message: timeline, time taken, review rounds,
+  and who used which model, with tokens and cost. Add one line each on what the reviews found and what you fixed
+  yourself. Say that costs are pay-as-you-go API prices, not subscription spend.
 - If a tool isn't installed or signed in, do that part yourself and say so.
 - Never deploy or run production migrations unless the human says so. No secrets or personal data in the notepad.

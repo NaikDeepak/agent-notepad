@@ -87,6 +87,13 @@ check "cost: total sums the priced rows"      'grep -q "^total  *4.01$" $TMP/cos
 "$C" post codex all "task-u fyi | USAGE | model=claude-opus-5-5 in=99000000 out=0 cr=0 cw=0 cw1h=0" >/dev/null
 check "cost: a MSG quoting a USAGE line is not counted" '"$C" cost --grep task-u | grep -q "^total  *4.01$"'
 check "usage-import: non-ISO --since is rejected" '! "$C" usage-import claude claude-code "$CL" --since "2026-10-09 13:00" 2>/dev/null'
+"$C" post claude agy "TASK: task-s spec" >/dev/null; "$C" handoff agy claude "feat/task-s · done" >/dev/null
+"$C" post claude agy "REVIEW round 1: task-s" >/dev/null; "$C" usage agy gemini-test 1000 100 --note task-s >/dev/null
+"$C" summary task-s > "$TMP/sum"
+check "summary: timeline, time taken, handoffs and review rounds" \
+      'grep -q "TASK: task-s" $TMP/sum && grep -q "^Took [0-9]* min .* 1 handoff(s) · 1 review round(s)" $TMP/sum && ! grep -q "^  .*USAGE" $TMP/sum'
+check "summary: includes the cost table"    'grep -q "^agy  *gemini-test " $TMP/sum && grep -q "^total " $TMP/sum'
+check "summary: needs a task"               '! "$C" summary 2>/dev/null'
 check "cost: --grep with no match says so"    '"$C" cost --grep nope | grep -q "no USAGE entries match"'
 
 echo "usage importers: codex model lookup, agy"
